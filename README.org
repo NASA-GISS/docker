@@ -1,0 +1,318 @@
+
+* Docker
+
++ Instructions on using Docker to run ModelE
++ Docker container only contains =gfortran=
++ ModelE is on the host computer, and accessed via mounts
+
+** Dockerfile
+
++ This =Dockerfile= sets up the virtual machine
+
+#+BEGIN_SRC docker :tangle Dockerfile
+FROM ubuntu:22.04
+
+LABEL authors="Ken Mankoff"
+LABEL maintainer="ken.mankoff@nasa.gov"
+
+# system environment
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt-get -y update && apt-get install -y --no-install-recommends --no-install-suggests \
+      gfortran \
+      libopenmpi-dev \
+      libnetcdf-dev \
+      libnetcdff-dev \
+      make \
+      wget \
+  && apt-get autoremove -y \
+  && apt-get clean -y \ 
+  && rm -rf /var/lib/apt/lists/*
+
+RUN echo LANG="en_US.UTF-8" > /etc/default/locale
+
+ENV LANGUAGE en_US.UTF-8
+ENV LANG C
+ENV LC_ALL C
+ENV LC_CTYPE C
+
+ENV SHELL /bin/bash
+
+# create a user
+RUN useradd --create-home user && chmod a+rwx /home/user
+ENV HOME "/home/user"
+WORKDIR /home/user
+
+ENV MODELERC /home/user/.modelErc
+
+# # switch the user
+USER user
+
+# CMD ["/usr/bin/bash", "--version"]
+CMD ["gfortran", "--version"]
+#+END_SRC
+
+** Build
+#+BEGIN_SRC bash :exports both
+docker build -t modele .
+#+END_SRC
+
+** Run
+#+BEGIN_SRC bash :exports both
+ # run it with default CMD
+docker run -it modele
+
+# run interactively
+docker run -it modele bash
+
+# run with your user, ${HOME} mounted at /user/home, and ../modelE mounted at /modelE
+docker run -it --user $(id -u):$(id -g) --mount type=bind,src=${HOME},dst=/home/user --mount type=bind,src=$(pwd)/../modelE,dst=/modelE modele bash
+ls /modelE
+ls /ModelE_Support
+exit
+#+END_SRC
+
+** Use locally
+
+*** Set up ModelERC
+
++ You can mount your host =modelE= source code folder anywhere in the container
+  + In this example, the source is mounted at =/modelE=
+  + In the example above, we mounted the host =../modelE= to the container =/modelE= with =--mount type=bind,src=$(pwd)/../modelE,dst=/modelE=
++ You can mount your host =ModelE_Support= folder anywhere in the container
+  + In this example, =ModelE_Support= is mounted at =/ModelE_Support= and the =${MODELERC}= file expects it there
++ In this example, =${MODELERC}= on the host is =${HOME}/.modelErc.docker=, and in the container, is found at =/home/user/.modelErc.docker=
++ The Dockerfile also sets the following bash environment variables
+  + ~MODELERC=/home/user/.modelErc~ but we override it when we launch docker to point to =/home/user/.modelErc.docker=
+  + You can inject (or override) environment variables into docker with ~--env VAR="value"~
++ Below is an example file is saved as =${HOME}/.modelErc.docker=.
+  + We need to update ~MODELERC~ to point to this, knowing that host =~/= will be mounted at =/home/user/=
+  + We need to tell docker to mount the source code and =ModelE_Support= folder as expected below
+
+#+BEGIN_SRC bash :exports both :tangle ~/.modelErc.docker
+# This file contains global options for modelE. 
+# By default it assumes that the directory structure for modelE runs
+# is set under /ModelE_Support .
+
+## Directory structure ##
+
+# DECKS_REPOSITORY - a directory for permanenet storage of run info.
+# All rundecks that you create will be copied to this directory. 
+DECKS_REPOSITORY=/ModelE_Support/prod_decks
+
+# CMRUNDIR - directory to which all run directories will be linked.
+# This directory will be searched by most scripts for locations of 
+# specific runs.
+CMRUNDIR=/ModelE_Support/prod_runs
+
+# GCMSEARCHPATH - directory to search for gcm input files.
+# All necessary input files should be copied or linked to this directory.
+GCMSEARCHPATH=/ModelE_Support/prod_input_files
+
+# EXECDIR - path to directory with modelE scripts and with some
+# executables. This directory should contain the scripts from modelE/exec.
+EXECDIR=/ModelE_Support/exec
+
+# SAVEDISK - a directory where all run directories (which will contain
+# all output files such as rsf, acc etc.) will be created. This should
+# be big enough to accomodate all model output.
+SAVEDISK=/ModelE_Support/huge_space
+
+## External libraries ##
+
+# Some of these options can be provided by environment modules (if you 
+# use them). Specify here only what is necessary. Options specified 
+# here will overwrite options proviided by environment modules.
+
+# NETCDFHOME - path to location of netcdf installation directory. 
+# NETCDFHOME=/opt/netcdf/3.6.3
+NETCDFHOME=/usr
+NETCDFLIBDIR=/usr/lib/x86_64-linux-gnu
+
+# MPI - set to YES if you want to compile the model for parallel 
+# execution on multiple CPU cores. Keep in mind, that functional 
+# MPI library should be installed on your computer and its type 
+# and location should be specified below.
+# This option can be overwritten from the compile line.
+MPI=YES
+
+# MPIDISTR - the MPI distribution you are using. Currently supported 
+# distributions are: 'intel, 'openmpi', 'mpich2', 'mvapich2', 'SCALI',
+# 'mpt' 
+MPIDISTR=openmpi
+
+# MPIDIR - path to the MPI installation directory. (Needs to be set
+# only if compiler can't find correct MPI library and include files by
+# default)
+MPIDIR=/usr
+
+# MPILIBDIR - path to the location of MPI library. Set it only if 
+# it is different from the default $MPIDIR/lib
+MPILIBDIR=/usr/lib/x86_64-linux-gnu/openmpi/lib
+
+# MPIINCLUDEDIR - path to location of MPI include files. Set it only
+# if it is different from the default $MPIDIR/include
+MPIINCLUDEDIR=/usr/lib/x86_64-linux-gnu/openmpi/include/
+
+# ESMF5_DIR - path to the installation directory of ESMF (version 5)
+# library. (Required only for Cubed Sphere simulations)
+# ESMF5_DIR=
+
+# ESMF_BOPT - optimization level of ESMF library. (Should only be used
+# togeteher with ESMF5_DIR)
+# ESMF_BOPT=O
+
+## Architecture and compiler
+
+# ABI - Application Binary Interfaces. This variable specifies the
+# architecture you are using. The valid values are '64' and '32'. 
+# On most modern systems you should use '64'. Use '32' if your
+# hardware or compiler support only 32-bit binaries.
+ABI=64
+
+# COMPILER - specifies the Fortran compiler you are using. Currently
+# only 'intel' and 'gfortran' are supported. ('nag' has partial
+# support on development branch.) If you are using Modules for
+# Environment Management, then this variable may already be set in the
+# environment. In this case you don't need to set it here.
+COMPILER=gfortran
+
+## General User Preferences ##
+
+# MAILTO - email address of the user. When the program ends/crashes
+# all notifications will be sent to this address. Leave empty 
+# or unset if you don't want to receive these emails
+MAILTO=
+
+# UMASK - the value of 'umask' you want to use for model runs. The files
+# inside the run directory will have permissions set according to this
+# mask.
+UMASK=022
+
+# OVERWRITE - can "gmake rundeck" overwrite files already in repository?
+# (i.e. in the directory DECKS_REPOSITORY)
+OVERWRITE=NO
+
+# OUTPUT_TO_FILES - if set to YES all errors and warnings will be sent
+# to files with the names <source_name>.ERR
+OUTPUT_TO_FILES=YES
+
+# VERBOSE_OUTPUT - if set to YES gmake will show compilation commands
+# and some other information. Otherwise most of the output will be
+# suppressed
+VERBOSE_OUTPUT=NO
+
+#+END_SRC
+ 
+*** Compile
+
++ Note, before compiling ModelE you might need to make some changes for it to work with =gfortran=, such as
+
+#+BEGIN_SRC bash :exports both :results verbatim :dir ../modelE 
+git diff
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+diff --git a/config/compiler.gfortran.mk b/config/compiler.gfortran.mk
+index a991e1a05..41878da23 100644
+--- a/config/compiler.gfortran.mk
++++ b/config/compiler.gfortran.mk
+@@ -63,10 +63,10 @@ endif
+ # flags needed for particular releases
+ 
+ FFLAGS_RELEASE =
+-ifneq (,$(filter 10 11 12,$(GFORTRAN_RELEASE)))
++ifeq ($(GFORTRAN_RELEASE),10)
+ FFLAGS_RELEASE += -fallow-argument-mismatch
+ endif
+-ifneq (,$(filter 8 9 10 11 12,$(GFORTRAN_RELEASE)))
++ifneq (,$(filter 8 9 10,$(GFORTRAN_RELEASE)))
+ FFLAGS_RELEASE += -fwrapv
+ endif
+ 
+#+end_example
+
+#+BEGIN_SRC screen
+docker run -it \
+       --user $(id -u):$(id -g) \
+       --env MODELERC="/home/user/.modelErc.docker" \
+       --mount type=bind,src=${HOME},dst=/home/user \
+       --mount type=bind,src=$(pwd)/../modelE,dst=/modelE \
+       --mount type=bind,src=$(pwd)/../ModelE_Support,dst=/ModelE_Support \
+       modele \
+       bash
+
+cd /modelE/decks/
+make rundeck RUNSRC=E4M20 RUN=E4M20_docker_test01
+../exec/get_input_data -w E4M20_test01 ../../ModelE_Support/prod_input_files/
+
+make clean RUN=E4M20_docker_test01
+make -j setup RUN=E4M20_docker_test01
+#+END_SRC
+
+*** Run
+#+BEGIN_SRC bash :exports both :exports both :results verbatim
+docker run -it \
+       --user $(id -u):$(id -g) \
+       --env MODELERC="/home/user/.modelErc.docker" \
+       --mount type=bind,src=${HOME},dst=/home/user \
+       --mount type=bind,src=$(pwd)/../modelE,dst=/modelE \
+       --mount type=bind,src=$(pwd)/../ModelE_Support,dst=/ModelE_Support \
+       modele \
+       bash
+
+cd /modelE/decks/
+# My computer has 4 cores, each dual thread, total of 8 CPU
+../exec/runE E4M20_docker_test01 -cold-restart -np 2
+../exec/runE E4M20_docker_test01 -np 4 # 18 model-yr/human-day
+MPI_FLAGS=--use-hw-cputhreads ../exec/runE E4M20_docker_test01 -np 8 # 15 model-yr/human-day
+#+END_SRC
+
+** Deploy for sharing
+
+#+BEGIN_SRC bash :exports both
+# docker tag local-image:tagname new-repo:tagname
+docker tag modele mankoff/modele:gfortran
+docker login -u "user" -p "pass" docker.io
+docker push mankoff/modele:gfortran
+#+END_SRC
+
+** Use on discover
+
++ Can't run docker on =discover=
++ Can run docker images using =singularity=.
++ =singularity= is like docker but for HPC systems
++ Easily build micro (or full) VMs to run whatever applications you want.
+
+*** Singularity example
+As an example, if you need to run =lynx= to do some web-browsing from =discover=,
+
+#+BEGIN_SRC bash :exports both :results verbatim
+
+# Pulling down VMs can take some space, don't do it in ~/
+cd ${NOBACKUP} 
+export SINGULARITY_CACHEDIR=${NOBACKUP}/.singularity/cache
+
+mkdir -p singularity
+cd singularity
+
+module load singularity
+singularity pull lynx.sif docker://nbrown/lynx
+singularity exec -B ./:${TMPDIR} lynx.sif lynx http://www.giss.nasa.gov
+#+END_SRC
+
+*** ModelE in Singularity running via SLURM batch jobs
+
+#+BEGIN_SRC bash :exports both :exports both :results verbatim
+cd ${NOBACKUP} 
+export SINGULARITY_CACHEDIR=${NOBACKUP}/.singularity/cache
+
+mkdir -p singularity
+cd singularity
+
+module load singularity
+singularity pull modele.sif docker://mankoff/modele
+
+# TODO - Build script to submit SLURM job that launches runE in singularity container
+#+END_SRC
