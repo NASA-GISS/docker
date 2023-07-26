@@ -18,16 +18,28 @@ LABEL maintainer="ken.mankoff@nasa.gov"
 # system environment
 ENV DEBIAN_FRONTEND noninteractive
 
+ 
 RUN apt-get -y update && apt-get install -y --no-install-recommends --no-install-suggests \
+      coreutils \
+      cmake \
+      g++ \
+      gcc \
+      gdb \
       gfortran \
+      git \
       libopenmpi-dev \
       libnetcdf-dev \
       libnetcdff-dev \
       make \
-      wget \
-  && apt-get autoremove -y \
-  && apt-get clean -y \ 
-  && rm -rf /var/lib/apt/lists/*
+      nano \
+      python3 \
+      python3-dev \
+      python3-pip \
+      vim \
+      wget
+#  && apt-get autoremove -y \ 
+#  && apt-get clean -y \ 
+#  && rm -rf /var/lib/apt/lists/*
 
 RUN echo LANG="en_US.UTF-8" > /etc/default/locale
 
@@ -38,15 +50,47 @@ ENV LC_CTYPE C
 
 ENV SHELL /bin/bash
 
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 # create a user
 RUN useradd --create-home user && chmod a+rwx /home/user
 ENV HOME "/home/user"
 WORKDIR /home/user
 
-ENV MODELERC /home/user/.modelErc
-
-# # switch the user
+# switch the user
 USER user
+
+RUN pip3 install cffi numpy
+
+RUN git clone https://github.com/Goddard-Fortran-Ecosystem/pFUnit.git \
+  && cd pFUnit \
+  && mkdir build \
+  && cd build \
+  && cmake .. \
+  && make -j tests \
+  && make -j install \
+  && cd
+
+#      -D PYTHON_INCLUDE_DIR=$(python -c "import sysconfig; print(sysconfig.get_path('include'))")  \
+#      -D PYTHON_LIBRARY=$(python -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))") \
+#      -D Python_EXECUTABLE:FILEPATH=$(which python) \
+
+RUN git clone https://github.com/nbren12/call_py_fort.git \
+  && cd call_py_fort \
+  && cmake -B build . \
+      -D CMAKE_INSTALL_PREFIX=./opt/ \
+      -D PYTHON_INCLUDE_DIR=/usr/include/python3.10 \
+      -D PYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu \
+      -D CMAKE_PREFIX_PATH=../pFUnit/build/installed \
+      -D Python_EXECUTABLE:FILEPATH=/usr/bin/python \
+  && make -C build \
+  && make -C build install \
+  && cd
+
+# RUN export PYTHONPATH=./call_py_fort/examples
+# ./call_py_fort/build/examples/hello_world # works!
+
+RUN echo "PS1='docker \h:\w\$ '" >> .bashrc
 
 # CMD ["/usr/bin/bash", "--version"]
 CMD ["gfortran", "--version"]
@@ -57,6 +101,18 @@ CMD ["gfortran", "--version"]
 docker build -t modele .
 #+END_SRC
 
+** Set up files and folders outside of docker
+
+You can create these locally, or make links to them elsewhere.
+ 
+| Description               | External path     | Internal mount point | Notes                      |
+|---------------------------+-------------------+----------------------+----------------------------|
+| modelE source code folder | ./modelE          | /modelE              | mankoff/coupler/dev branch |
+| modelE input files folder | ./modelE_Support  | /modelE_Support      |                            |
+| modelErc config file      | ./modelErc.docker | /modelErc.docker     |                            |
+
+For example, you can set up the =./modelE= folder either by =git clone= to this location, or =ln -s /path/to/modelE=.
+
 ** Run
 #+BEGIN_SRC bash :exports both
  # run it with default CMD
@@ -66,7 +122,7 @@ docker run -it modele
 docker run -it modele bash
 
 # run with your user, ${HOME} mounted at /user/home, and ../modelE mounted at /modelE
-docker run -it --user $(id -u):$(id -g) --mount type=bind,src=${HOME},dst=/home/user --mount type=bind,src=$(pwd)/../modelE,dst=/modelE modele bash
+docker run -it --user $(id -u):$(id -g) --mount type=bind,src=$(pwd)/modelE,dst=/modelE --mount type=bind,src=$(pwd)/ModelE_Support,dst=/ModelE_Support modele bash
 ls /modelE
 ls /ModelE_Support
 exit
@@ -89,7 +145,7 @@ exit
   + We need to update ~MODELERC~ to point to this, knowing that host =~/= will be mounted at =/home/user/=
   + We need to tell docker to mount the source code and =ModelE_Support= folder as expected below
 
-#+BEGIN_SRC bash :exports both :tangle ~/.modelErc.docker
+#+BEGIN_SRC bash :exports both :tangle modelErc.docker
 # This file contains global options for modelE. 
 # By default it assumes that the directory structure for modelE runs
 # is set under /ModelE_Support .
@@ -206,68 +262,44 @@ VERBOSE_OUTPUT=NO
  
 *** Compile
 
-+ Note, before compiling ModelE you might need to make some changes for it to work with =gfortran=, such as
-
-#+BEGIN_SRC bash :exports both :results verbatim :dir ../modelE 
-git diff
-#+END_SRC
-
-#+RESULTS:
-#+begin_example
-diff --git a/config/compiler.gfortran.mk b/config/compiler.gfortran.mk
-index a991e1a05..41878da23 100644
---- a/config/compiler.gfortran.mk
-+++ b/config/compiler.gfortran.mk
-@@ -63,10 +63,10 @@ endif
- # flags needed for particular releases
- 
- FFLAGS_RELEASE =
--ifneq (,$(filter 10 11 12,$(GFORTRAN_RELEASE)))
-+ifeq ($(GFORTRAN_RELEASE),10)
- FFLAGS_RELEASE += -fallow-argument-mismatch
- endif
--ifneq (,$(filter 8 9 10 11 12,$(GFORTRAN_RELEASE)))
-+ifneq (,$(filter 8 9 10,$(GFORTRAN_RELEASE)))
- FFLAGS_RELEASE += -fwrapv
- endif
- 
-#+end_example
-
 #+BEGIN_SRC screen
 docker run -it \
        --user $(id -u):$(id -g) \
-       --env MODELERC="/home/user/.modelErc.docker" \
-       --mount type=bind,src=${HOME},dst=/home/user \
-       --mount type=bind,src=$(pwd)/../modelE,dst=/modelE \
-       --mount type=bind,src=$(pwd)/../ModelE_Support,dst=/ModelE_Support \
+       --env MODELERC="/host/modelErc.docker" \
+       --mount type=bind,src=$(pwd),dst=/host \
+       --mount type=bind,src=$(pwd)/modelE,dst=/modelE \
+       --mount type=bind,src=$(pwd)/ModelE_Support,dst=/ModelE_Support \
        modele \
        bash
 
 cd /modelE/decks/
-make rundeck RUNSRC=E4M20 RUN=E4M20_docker_test01
-../exec/get_input_data -w E4M20_test01 ../../ModelE_Support/prod_input_files/
 
-make clean RUN=E4M20_docker_test01
-make -j setup RUN=E4M20_docker_test01
+export LD_LIBRARY_PATH=/home/user/call_py_fort/opt/lib
+export PYTHONPATH=/host # path to Python file =foo.py= from ~call call_function("foo", "bar")~
+
+RUNNAME=E4M20_docker_test01 
+make rundeck RUNSRC=E4M20 RUN=${RUNNAME} OVERWRITE=YES # low res, no ocean
+
+RUNNAME=E6F40_docker_test02 
+make rundeck RUNSRC=E6F40 RUN=${RUNNAME} OVERWRITE=YES # hi res, ocean
+
+make clean RUN=${RUNNAME}
+
+make -j setup \
+     RUN=${RUNNAME} \
+     LIME=1 \
+     VERBOSE=1
+
+../exec/runE ${RUNNAME} -cold-restart -np 2
 #+END_SRC
 
-*** Run
-#+BEGIN_SRC bash :exports both :exports both :results verbatim
-docker run -it \
-       --user $(id -u):$(id -g) \
-       --env MODELERC="/home/user/.modelErc.docker" \
-       --mount type=bind,src=${HOME},dst=/home/user \
-       --mount type=bind,src=$(pwd)/../modelE,dst=/modelE \
-       --mount type=bind,src=$(pwd)/../ModelE_Support,dst=/ModelE_Support \
-       modele \
-       bash
-
-cd /modelE/decks/
-# My computer has 4 cores, each dual thread, total of 8 CPU
-../exec/runE E4M20_docker_test01 -cold-restart -np 2
-../exec/runE E4M20_docker_test01 -np 4 # 18 model-yr/human-day
-MPI_FLAGS=--use-hw-cputhreads ../exec/runE E4M20_docker_test01 -np 8 # 15 model-yr/human-day
+If missing input file, do the following 1x to get needed input files
+#+BEGIN_SRC bash :exports both :results verbatim
+../exec/get_input_data -w ${RUNNAME} /ModelE_Support/prod_input_files/
 #+END_SRC
+
+
+
 
 ** Deploy for sharing
 
