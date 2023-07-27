@@ -90,6 +90,8 @@ RUN git clone https://github.com/nbren12/call_py_fort.git \
 # RUN export PYTHONPATH=./call_py_fort/examples
 # ./call_py_fort/build/examples/hello_world # works!
 
+RUN pip3 install xarray rioxarray netcdf4
+
 RUN echo "PS1='docker \h:\w\$ '" >> .bashrc
 
 # CMD ["/usr/bin/bash", "--version"]
@@ -287,10 +289,23 @@ make clean RUN=${RUNNAME}
 
 make -j setup \
      RUN=${RUNNAME} \
+     EXTRA_FFLAGS=" -O0 -ggdb3 " \
+     EXTRA_LFLAGS+=" -O0 -ggdb3 " \
      LIME=1 \
      VERBOSE=1
 
+
+# Normal run
 ../exec/runE ${RUNNAME} -cold-restart -np 2
+
+# debug
+cd ${RUNNAME}
+./${RUNNAME}ln
+gdb --args ./${RUNNAME}.exe -cold-restart -i I
+start
+# b model/SURFACE.f:1388
+b model/giss_LSM/SNOW.f:480
+c
 #+END_SRC
 
 If missing input file, do the following 1x to get needed input files
