@@ -1,6 +1,13 @@
-# This file contains global options for modelE. 
-# By default it assumes that the directory structure for modelE runs
-# is set under /ModelE_Support .
+
+# This file configures environment variables for modelE.
+
+# It is designed for use with Docker, where the ModelE_Support folder that
+# you maintain on the host computer at /path/to/host/ModelE_Support is
+# mounted in Docker at the root folder (i.e /ModelE_Support). This is done with
+# the following option when running Docker:
+#
+# --mount type=bind,src=/path/to/host/ModelE_Support,dst=/ModelE_Support
+#
 
 ## Directory structure ##
 
@@ -36,6 +43,8 @@ SAVEDISK=/ModelE_Support/huge_space
 # NETCDFHOME=/opt/netcdf/3.6.3
 NETCDFHOME=/usr
 NETCDFLIBDIR=/usr/lib/x86_64-linux-gnu
+PNETCDFHOME=/usr
+PNETCDFLIBDIR=/usr/lib/x86_64-linux-gnu
 
 # MPI - set to YES if you want to compile the model for parallel 
 # execution on multiple CPU cores. Keep in mind, that functional 
@@ -108,4 +117,4 @@ OUTPUT_TO_FILES=YES
 # VERBOSE_OUTPUT - if set to YES gmake will show compilation commands
 # and some other information. Otherwise most of the output will be
 # suppressed
-VERBOSE_OUTPUT=NO
+VERBOSE_OUTPUT=YES

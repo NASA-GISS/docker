@@ -4,12 +4,14 @@ LABEL authors="Ken Mankoff"
 LABEL maintainer="ken.mankoff@nasa.gov"
 
 # system environment
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get -y update && apt-get install -y --no-install-recommends --no-install-suggests \
       gfortran \
+      gdb \
       libopenmpi-dev \
       libnetcdf-dev \
+      libpnetcdf-dev \
       libnetcdff-dev \
       make \
       wget \
@@ -19,22 +21,23 @@ RUN apt-get -y update && apt-get install -y --no-install-recommends --no-install
 
 RUN echo LANG="en_US.UTF-8" > /etc/default/locale
 
-ENV LANGUAGE en_US.UTF-8
-ENV LANG C
-ENV LC_ALL C
-ENV LC_CTYPE C
+ENV LANGUAGE=en_US.UTF-8
+ENV LANG=C
+ENV LC_ALL=C
+ENV LC_CTYPE=C
 
-ENV SHELL /bin/bash
+ENV SHELL=/bin/bash
 
 # create a user
 RUN useradd --create-home user && chmod a+rwx /home/user
-ENV HOME "/home/user"
+ENV HOME="/home/user"
 WORKDIR /home/user
 
-ENV MODELERC /home/user/.modelErc
-
-# # switch the user
+# switch the user
 USER user
+
+COPY --chown=user:user modelErc .
+ENV MODELERC=/home/user/modelErc
 
 # CMD ["/usr/bin/bash", "--version"]
 CMD ["gfortran", "--version"]

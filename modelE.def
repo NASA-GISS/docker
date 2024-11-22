@@ -1,0 +1,61 @@
+Bootstrap: docker
+From: ubuntu:22.04
+Stage: spython-base
+
+%setup
+  # run on host after image created
+  
+%files
+  modelErc /home/user/modelErc
+
+%post
+  apt-get -y update && apt-get install -y --no-install-recommends --no-install-suggests \
+    gfortran \
+    gdb \
+    libopenmpi-dev \
+    libnetcdf-dev \
+    libpnetcdf-dev \
+    libnetcdff-dev \
+    make \
+    wget \
+    && apt-get autoremove -y \
+    && apt-get clean -y \
+    && rm -rf /var/lib/apt/lists/*
+
+    echo LANG="en_US.UTF-8" > /etc/default/locale
+
+    # create a user
+    useradd --create-home user && chmod a+rwx /home/user
+    mkdir -p /home/user
+    cd /home/user
+
+    # switch the user
+    su -  user # USER user
+
+%test
+  true
+
+%environment
+  export LANGUAGE=en_US.UTF-8
+  export LANG=C
+  export LC_ALL=C
+  export LC_CTYPE=C
+  export SHELL=/bin/bash
+  export DEBIAN_FRONTEND=noninteractive
+  export HOME="/home/user"
+  export MODELERC=/home/user/modelErc
+
+%startscript
+  cd /home/user
+  exec /bin/bash gfortran --version "$@"
+
+%runscript
+  cd /home/user
+  exec /bin/bash gfortran --version "$@"
+
+%labels
+  authors Ken Mankoff
+  maintainer ken.mankoff@nasa.gov
+
+%help
+  This is a Singularity container for ModelE
