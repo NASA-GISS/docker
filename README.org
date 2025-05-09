@@ -28,6 +28,7 @@ docker build -t modele .
 
 + Replace =$(pwd)/modelE= with your =/path/to/modelE= source code directory.
 + Replace =${HOME}/data/ModelE_Support= with your =/path/to/Model_Support=.
++ Replace =${HOME}/data/ModelE_Support/prod_input_files= with your =/path/to/prod_input_files=.
 
 #+begin_src bash :exports both
 # run it with default CMD
@@ -41,6 +42,7 @@ exit
 docker run -it --user $(id -u):$(id -g) \
        --mount type=bind,src=$(pwd)/../modelE,dst=/modelE \
        --mount type=bind,src=${HOME}/data/ModelE_Support,dst=/ModelE_Support \
+       --mount type=bind,src=${HOME}/data/ModelE_Support/prod_input_files,dst=/prod_input_files \
        modele bash
 ls -l /modelE
 ls -l /ModelE_Support
