@@ -137,9 +137,41 @@ export SINGULARITY_TMPDIR="$NOBACKUP/.singularity"
 #+end_src
 
 #+begin_src bash :exports both :results verbatim
-module load singularity
-# singularity build modele.sif docker-daemon://modele # local
-# singularity pull lynx.sif docker://nbrown/lynx
-# singularity exec -B ./:${TMPDIR} lynx.sif lynx http://www.giss.nasa.gov
+module load singularity/4.3.0
+
+singularity pull  --force --disable-cache docker://mankoff/modele:gfortran
+singularity pull docker://mankoff/modele:gfortran
+
+# Generic example
+singularity exec \
+  --compat \
+  --bind /path/to/big/tmp/space/:/gpfsm \
+  --bind /path/to/ModelE_Support/:/ModelE_Support \
+  --bind /path/to/prod_input_files/:/prod_input_files \
+  --bind /path/to/modelE_SRC/:/modelE \
+  docker://mankoff/modele:gfortran \
+
+# Personal specific example
+singularity exec \
+  --compat \
+  --bind ${HOME}/projects/GISS/tmp/:/gpfsm \
+  --bind ${HOME}/projects/GISS/ModelE_Support/:/ModelE_Support \
+  --bind /discover/nobackup/projects/giss/prod_input_files/:/prod_input_files \
+  --bind $(pwd)/E2.1_branch/:/modelE \
+  docker://mankoff/modele:gfortran \
+  bash
+
+
+cd /modelE/decks
+RUNNAME=<rundeck>
+
+make -j setup RUN=${RUNNAME} COMPILE_WITH_TRAPS=NO EXTRA_FFLAGS="-O2 -fallow-argument-mismatch -I/usr/include/x86_64-linux-gnu " EXTRA_LFLAGS="-O2" | tee ${RUNNAME}.compile.out; cp ${RUNNAME}.compile.out ${RUNNAME}/'
+
+# run...
+
+# debug
+(cd ${RUNNAME}; ./${RUNNAME}ln; gdb --args ${RUNNAME}.bin -i I -cold-restart)
+
+# TODO: Instructions how to submit to SLURM w/ SBATCH script
 #+end_src
 
