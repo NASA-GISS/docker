@@ -71,6 +71,8 @@ exit
 docker run -it \
        --mount type=bind,src=$(pwd)/modelE,dst=/modelE \
        --mount type=bind,src=${HOME}/data/ModelE_Support,dst=/ModelE_Support \
+       --mount type=bind,src=${HOME}/data/ModelE_Support/prod_input_files,dst=/prod_input_files \
+       --user $(id -u):$(id -g) \
        modele \
        bash
 #+end_src
@@ -82,7 +84,7 @@ cd /modelE/decks/
 
 # 8x10 lat x lon; no ocean; model month takes O(minute)
 RUNNAME=docker_test01
-make rundeck RUNSRC=nonProduction/nonProduction_E_AR5_C12 RUN=${RUNNAME}
+make rundeck RUNSRC=E1oM20 RUN=${RUNNAME} OVERWRITE=YES
 # fetch input files for this run
 ../exec/get_input_data -w ${RUNNAME} /ModelE_Support/prod_input_files/
 
@@ -102,8 +104,8 @@ make -j setup RUN=${RUNNAME} COMPILE_WITH_TRAPS=NO EXTRA_FFLAGS="-O2 -fallow-arg
 *** Run
 
 #+BEGIN_SRC bash :exports both :exports both :results verbatim
-../exec/runE ${RUNNAME} -cold-restart -np 4
-../exec/runE ${RUNNAME} -np 4
+../exec/runE ${RUNNAME} -cold-restart -np 8
+../exec/runE ${RUNNAME} -np 8
 #+END_SRC
 
 ** Deploy for sharing
